@@ -6,79 +6,87 @@ import { PlacesApiError } from '../utils/errors';
 import { calculateDistanceMeters } from '../utils/distance';
 
 export class PlacesService {
-  private readonly baseUrl = 'https://places.googleapis.com/v1/places:searchNearby';
+  // TomTom Search API v2 nearbySearch endpoint
+  private readonly baseUrl = 'https://api.tomtom.com/search/2/nearbySearch/.json';
 
   public async findNearbyCandidates(location: UserLocation): Promise<EscapeCandidate[]> {
-    try {
-      const fieldMask = [
-        'places.id',
-        'places.displayName',
-        'places.primaryType',
-        'places.types',
-        'places.formattedAddress',
-        'places.location',
-        'places.businessStatus',
-        'places.currentOpeningHours',
-        'places.rating',
-      ].join(',');
+    if (!env.TOMTOM_API_KEY) {
+      console.error('[PlacesService] Missing TOMTOM_API_KEY');
+      throw new PlacesApiError('TomTom API key is not configured.');
+    }
 
-      const payload = {
-        includedPrimaryTypes: escapeRouteConfig.supportedPlaceTypes,
-        locationRestriction: {
-          circle: {
-            center: {
-              latitude: location.latitude,
-              longitude: location.longitude,
-            },
-            radius: escapeRouteConfig.searchRadiusMeters,
-          },
-        },
-        maxResultCount: escapeRouteConfig.maxCandidates,
+    try {
+      const params = {
+        key: env.TOMTOM_API_KEY,
+        lat: location.latitude,
+        lon: location.longitude,
+        radius: escapeRouteConfig.searchRadiusMeters,
+        limit: escapeRouteConfig.maxCandidates,
+        categorySet: escapeRouteConfig.supportedCategorySet,
       };
 
-      const response = await axios.post(this.baseUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': env.GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': fieldMask,
-        },
+      const response = await axios.get(this.baseUrl, {
+        params,
+        timeout: 10000,
       });
 
-      const places = response.data.places || [];
+      const results = response.data?.results || [];
 
-      // Map raw API response to internal EscapeCandidate structure
-      const candidates: EscapeCandidate[] = places.map((p: any) => {
-        const candidateLat = p.location?.latitude || 0;
-        const candidateLng = p.location?.longitude || 0;
+      // Normalize TomTom POI result format into EscapeCandidate
+      const candidates: EscapeCandidate[] = results.map((item: any) => {
+        const placeId = item.id ? String(item.id) : (item.poi?.name ? `${item.poi.name}_${item.position?.lat}_${item.position?.lon}` : 'unknown_place_id');
+        const name = item.poi?.name || 'Unknown Location';
+        const position = item.position || {};
+        const latitude = typeof position.lat === 'number' ? position.lat : 0;
+        const longitude = typeof position.lon === 'number' ? position.lon : 0;
+
+        // Categories from TomTom classifications / categories
+        const classifications = item.poi?.classifications || [];
+        const primaryCategory = item.poi?.categories?.[0] || classifications[0]?.code || 'public_place';
+        const categories = item.poi?.categories || classifications.map((c: any) => c.code || c.name).filter(Boolean);
+
+        // Address formatting from TomTom address object
+        const address = item.address?.freeformAddress || item.address?.streetName || 'Address unavailable';
+
+        // Distance preference: use TomTom's calculated distance if provided, otherwise compute via Haversine
+        let distanceMeters: number;
+        if (typeof item.dist === 'number' && !isNaN(item.dist)) {
+          distanceMeters = Math.round(item.dist);
+        } else {
+          distanceMeters = calculateDistanceMeters(location, { latitude, longitude });
+        }
 
         const candidate: EscapeCandidate = {
-          placeId: p.id,
-          name: p.displayName?.text || 'Unknown',
-          type: p.primaryType || 'unknown',
-          types: p.types || [],
-          address: p.formattedAddress || 'Unknown Address',
-          latitude: candidateLat,
-          longitude: candidateLng,
-          businessStatus: p.businessStatus || 'UNKNOWN',
-          openNow: p.currentOpeningHours?.openNow || false,
-          rating: p.rating,
-          distanceMeters: calculateDistanceMeters(location, {
-            latitude: candidateLat,
-            longitude: candidateLng,
-          }),
+          placeId,
+          name,
+          category: primaryCategory,
+          categories: categories.length > 0 ? categories : undefined,
+          address,
+          latitude,
+          longitude,
+          distanceMeters,
         };
+
+        // If TomTom opening hours or operational status are available, preserve them factually
+        if (item.poi?.openingHours) {
+          if (typeof item.poi.openingHours.openNow === 'boolean') {
+            candidate.openNow = item.poi.openingHours.openNow;
+          }
+        }
+
         return candidate;
       });
 
-      // Filter out permanently closed businesses or those without valid coordinates
-      return candidates.filter((c) => {
-        const validCoords = c.latitude !== 0 && c.longitude !== 0;
-        const notClosed = c.businessStatus !== 'CLOSED_PERMANENTLY';
-        return validCoords && notClosed;
-      });
+      // Filter out invalid coordinates and sort by distance
+      const validCandidates = candidates
+        .filter(c => c.latitude !== 0 && c.longitude !== 0)
+        .sort((a, b) => (a.distanceMeters || 0) - (b.distanceMeters || 0));
+
+      return validCandidates.slice(0, escapeRouteConfig.maxCandidates);
     } catch (error: any) {
-      console.error('[PlacesService] Error finding candidates:', error?.response?.data || error.message);
-      throw new PlacesApiError('Failed to fetch nearby places from Google API.');
+      console.error('[PlacesService] Error searching nearby places with TomTom:', error?.response?.data || error.message);
+      throw new PlacesApiError('Failed to search nearby destinations from TomTom Search API.');
     }
   }
 }
+

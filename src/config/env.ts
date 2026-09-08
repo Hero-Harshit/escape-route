@@ -5,7 +5,7 @@ dotenv.config();
 
 interface Env {
   PORT: number;
-  GOOGLE_MAPS_API_KEY: string;
+  TOMTOM_API_KEY: string;
   GEMINI_API_KEY: string;
   PLACES_SEARCH_RADIUS_METERS: number;
   DEFAULT_TRAVEL_MODE: string;
@@ -14,14 +14,14 @@ interface Env {
 
 const getEnv = (): Env => {
   const PORT = parseInt(process.env.PORT || '3000', 10);
-  const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
+  const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY || '';
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
   const PLACES_SEARCH_RADIUS_METERS = parseInt(process.env.PLACES_SEARCH_RADIUS_METERS || '5000', 10);
-  const DEFAULT_TRAVEL_MODE = process.env.DEFAULT_TRAVEL_MODE || 'WALK';
+  const DEFAULT_TRAVEL_MODE = process.env.DEFAULT_TRAVEL_MODE || 'pedestrian';
   const NODE_ENV = process.env.NODE_ENV || 'development';
 
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('WARNING: GOOGLE_MAPS_API_KEY is not set in the environment.');
+  if (!TOMTOM_API_KEY) {
+    console.warn('WARNING: TOMTOM_API_KEY is not set in the environment.');
   }
 
   if (!GEMINI_API_KEY) {
@@ -30,7 +30,7 @@ const getEnv = (): Env => {
 
   return {
     PORT,
-    GOOGLE_MAPS_API_KEY,
+    TOMTOM_API_KEY,
     GEMINI_API_KEY,
     PLACES_SEARCH_RADIUS_METERS,
     DEFAULT_TRAVEL_MODE,

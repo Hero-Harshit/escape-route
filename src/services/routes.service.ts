@@ -1,70 +1,82 @@
 import axios from 'axios';
 import { env } from '../config/env';
 import { escapeRouteConfig } from '../config/escapeRoute.config';
-import { RouteResult, UserLocation } from '../types/escapeRoute.types';
+import { RouteLeg, RouteResult, UserLocation } from '../types/escapeRoute.types';
 import { RoutesApiError } from '../utils/errors';
 
 export class RoutesService {
-  private readonly baseUrl = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+  // TomTom Routing API v1 calculateRoute endpoint
+  private readonly baseUrl = 'https://api.tomtom.com/routing/1/calculateRoute';
 
   public async computeEscapeRoute(
     origin: UserLocation,
-    destinationPlaceId: string
+    destination: UserLocation
   ): Promise<RouteResult> {
-    try {
-      const fieldMask = [
-        'routes.distanceMeters',
-        'routes.duration',
-        'routes.polyline.encodedPolyline',
-        'routes.legs.steps'
-      ].join(',');
+    if (!env.TOMTOM_API_KEY) {
+      console.error('[RoutesService] Missing TOMTOM_API_KEY');
+      throw new RoutesApiError('TomTom API key is not configured.');
+    }
 
-      const payload = {
-        origin: {
-          location: {
-            latLng: {
-              latitude: origin.latitude,
-              longitude: origin.longitude,
-            },
-          },
-        },
-        destination: {
-          placeId: destinationPlaceId,
-        },
-        travelMode: escapeRouteConfig.defaultTravelMode,
-        routingPreference: 'ROUTING_PREFERENCE_UNSPECIFIED',
+    try {
+      // TomTom calculateRoute path format: /{locations}/json
+      // Format: {startLat},{startLon}:{destLat},{destLon}
+      const locations = `${origin.latitude},${origin.longitude}:${destination.latitude},${destination.longitude}`;
+      const url = `${this.baseUrl}/${locations}/json`;
+
+      const params = {
+        key: env.TOMTOM_API_KEY,
+        travelMode: escapeRouteConfig.defaultTravelMode, // pedestrian by default
+        routeType: 'fastest',
+        instructionsType: 'text',
       };
 
-      const response = await axios.post(this.baseUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': env.GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': fieldMask,
-        },
+      const response = await axios.get(url, {
+        params,
+        timeout: 10000,
       });
 
-      const routes = response.data.routes || [];
+      const routes = response.data?.routes || [];
 
       if (routes.length === 0) {
-        throw new Error('No routes returned from Google Routes API.');
+        throw new Error('No routes returned from TomTom Routing API.');
       }
 
       const route = routes[0];
-      
-      // Parse duration which comes as e.g. "2700s"
-      const durationSeconds = route.duration 
-        ? parseInt(route.duration.replace('s', ''), 10) 
-        : 0;
+      const summary = route.summary || {};
+      const distanceMeters = summary.lengthInMeters || 0;
+      const durationSeconds = summary.travelTimeInSeconds || 0;
+
+      // Extract legs and coordinate points if provided by TomTom
+      const legs: RouteLeg[] = (route.legs || []).map((leg: any) => ({
+        distanceMeters: leg.summary?.lengthInMeters,
+        durationSeconds: leg.summary?.travelTimeInSeconds,
+        points: (leg.points || []).map((pt: any) => ({
+          latitude: pt.latitude,
+          longitude: pt.longitude,
+        })),
+      }));
+
+      // Extract guidance instructions/steps if present
+      const steps = (route.guidance?.instructions || []).map((inst: any) => ({
+        message: inst.message,
+        maneuver: inst.maneuver,
+        street: inst.street,
+        distanceMeters: inst.routeOffsetInMeters,
+        travelTimeInSeconds: inst.travelTimeInSeconds,
+        point: inst.point ? { latitude: inst.point.latitude, longitude: inst.point.longitude } : undefined,
+      }));
 
       return {
-        distanceMeters: route.distanceMeters || 0,
+        distanceMeters,
         durationSeconds,
-        polyline: route.polyline?.encodedPolyline || '',
-        steps: route.legs && route.legs[0] ? route.legs[0].steps || [] : [],
+        polyline: route.legs?.[0]?.points ? JSON.stringify(route.legs[0].points) : undefined,
+        legs: legs.length > 0 ? legs : undefined,
+        steps: steps.length > 0 ? steps : undefined,
       };
     } catch (error: any) {
-      console.error('[RoutesService] Error computing route:', error?.response?.data || error.message);
-      throw new RoutesApiError('Failed to compute route from Google Routes API.');
+      console.error('[RoutesService] Error computing route with TomTom:', error?.response?.data || error.message);
+      throw new RoutesApiError('Failed to compute route from TomTom Routing API.');
     }
   }
 }
+

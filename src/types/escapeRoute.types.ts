@@ -6,15 +6,15 @@ export interface UserLocation {
 export interface EscapeCandidate {
   placeId: string;
   name: string;
-  type: string;
-  types: string[];
-  address: string;
+  category?: string;
+  categories?: string[];
+  address?: string;
   latitude: number;
   longitude: number;
-  businessStatus: string;
-  openNow: boolean;
+  distanceMeters?: number; // Straight-line distance from user origin (meters)
+  businessStatus?: string;
+  openNow?: boolean;
   rating?: number;
-  distanceMeters?: number; // Straight-line distance
 }
 
 export interface GeminiDecision {
@@ -23,11 +23,18 @@ export interface GeminiDecision {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export interface RouteLeg {
+  distanceMeters?: number;
+  durationSeconds?: number;
+  points?: Array<{ latitude: number; longitude: number }>;
+}
+
 export interface RouteResult {
   distanceMeters: number;
   durationSeconds: number;
-  polyline: string;
-  steps: any[]; // Depending on what Google Routes returns
+  polyline?: string;
+  legs?: RouteLeg[];
+  steps?: any[];
 }
 
 export interface EscapeRouteResponse {

@@ -7,28 +7,57 @@ export const escapeRouteConfig = {
   // Maximum number of candidates to process and send to Gemini
   maxCandidates: 15,
 
-  // The default travel mode to use when requesting a route
+  // The default travel mode to use when requesting a route with TomTom Routing API
+  // Supported TomTom modes: pedestrian, car, bicycle, truck, motorcycle, van, etc.
   defaultTravelMode: env.DEFAULT_TRAVEL_MODE,
 
-  // Supported candidate place categories to search for in Google Places API
-  // These correspond to the Primary Types in Google Places API (New)
-  supportedPlaceTypes: [
-    'police',
+  // Supported candidate place categories to search for in TomTom Search API.
+  // Standard TomTom categorySet IDs for public, emergency, and populated destinations:
+  // 7321: Hospital / Polyclinic
+  // 7322: Police Station
+  // 7324: Fire Station
+  // 7326: Pharmacy
+  // 7311: Petrol Station / Gas Station
+  // 7389: Public Transport Stop / Metro / Bus Stop
+  // 7380: Railway Station
+  // 7373: Shopping Centre / Mall
+  // 7372: Supermarket / Groceries
+  // 7315: Restaurant
+  // 7314: Hotel / Motel
+  // 7342: Convenience Store / Kiosk
+  supportedCategorySet: [
+    '7321', // Hospital / Emergency
+    '7322', // Police Station
+    '7324', // Fire Station
+    '7326', // Pharmacy
+    '7311', // Petrol / Gas Station
+    '7389', // Public Transport / Metro / Transit
+    '7380', // Railway Station
+    '7373', // Shopping Mall
+    '7372', // Supermarket
+    '7315', // Restaurant
+    '7314', // Hotel
+    '7342', // Convenience Store
+  ].join(','),
+
+  // Fallback category names for POI search / query filtering if needed
+  supportedCategoryNames: [
+    'police station',
     'hospital',
-    'subway_station',
-    'train_station',
-    'shopping_mall',
-    'supermarket',
     'pharmacy',
-    'gas_station',
+    'shopping centre',
+    'supermarket',
+    'railway station',
+    'metro station',
+    'gas station',
     'hotel',
+    'convenience store',
     'restaurant',
-    'convenience_store',
   ],
 
   // AI model settings
   gemini: {
-    model: 'gemini-1.5-flash', // Using 1.5-flash as the latest standard fast model
+    model: 'gemini-1.5-flash',
     temperature: 0.1, // Low temperature for deterministic output
-  }
+  },
 };

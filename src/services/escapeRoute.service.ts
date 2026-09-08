@@ -49,17 +49,20 @@ export class EscapeRouteService {
       throw new InvalidDestinationSelectedError();
     }
 
-    // STEP 9 & 10: Call Google Routes API
+    // STEP 9 & 10: Call TomTom Routing API with origin and destination coordinates
     console.log('[EscapeRoute] Calculating route');
     const route = await this.routesService.computeEscapeRoute(
       userLocation,
-      selectedCandidate.placeId
+      {
+        latitude: selectedCandidate.latitude,
+        longitude: selectedCandidate.longitude,
+      }
     );
 
     console.log('[EscapeRoute] Escape route generated successfully');
 
-    // Remove properties that shouldn't go to the client for the recommended destination
-    const { types, openNow, businessStatus, distanceMeters, ...safeDestination } = selectedCandidate;
+    // Remove internal properties that shouldn't go to the client for the recommended destination
+    const { categories, openNow, businessStatus, distanceMeters, ...safeDestination } = selectedCandidate;
 
     // STEP 11: Return clean response
     return {
