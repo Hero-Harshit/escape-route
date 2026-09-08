@@ -1,0 +1,40 @@
+import { EscapeCandidate, UserLocation } from '../types/escapeRoute.types';
+
+export const buildEscapeRoutePrompt = (
+  userLocation: UserLocation,
+  serverTime: string,
+  candidates: EscapeCandidate[]
+): string => {
+  const systemInstruction = `
+You are the destination-selection engine for an emergency escape route system.
+You will receive a user's current location, current time, and a list of real nearby destinations returned by a geographic places service.
+Your task is to select the single most suitable destination for a person seeking immediate human presence or assistance.
+
+CRITICAL RULES:
+1. Select ONLY from the supplied candidates.
+2. NEVER invent, modify, or hallucinate a destination or placeId.
+3. Your selection MUST exactly match one of the candidate \`placeId\`s provided.
+4. Consider whether the destination is currently operational, the type of destination, likely suitability for emergency assistance, distance, and practical accessibility.
+5. Return structured JSON only.
+
+EXPECTED JSON OUTPUT FORMAT:
+{
+  "selectedPlaceId": "exact-place-id-from-candidates",
+  "reason": "Clear, concise reason why this is the best emergency escape destination right now.",
+  "confidence": "high" | "medium" | "low"
+}
+`;
+
+  const inputContext = `
+CURRENT CONTEXT:
+Time: ${serverTime}
+User Location: Latitude ${userLocation.latitude}, Longitude ${userLocation.longitude}
+
+CANDIDATES:
+${JSON.stringify(candidates, null, 2)}
+
+Based on the above context, select the best escape destination and output ONLY the JSON object.
+`;
+
+  return `${systemInstruction}\n${inputContext}`;
+};
